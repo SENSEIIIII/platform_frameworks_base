@@ -152,8 +152,6 @@ import com.android.server.utils.WatchedSparseBooleanArray;
 import com.android.server.utils.WatchedSparseIntArray;
 import com.android.server.wm.ActivityTaskManagerInternal;
 
-import ink.kaleidoscope.server.GmsManagerService;
-
 import libcore.util.EmptyArray;
 
 import java.io.BufferedOutputStream;
@@ -950,8 +948,6 @@ public class ComputerEngine implements Computer {
 
     public final ApplicationInfo getApplicationInfo(String packageName,
             @PackageManager.ApplicationInfoFlagsBits long flags, int userId) {
-        if (GmsManagerService.shouldHide(userId, packageName))
-            return null;
         return getApplicationInfoInternal(packageName, flags, Binder.getCallingUid(), userId);
     }
 
@@ -965,8 +961,6 @@ public class ComputerEngine implements Computer {
             @PackageManager.ApplicationInfoFlagsBits long flags,
             int filterCallingUid, int userId) {
         if (!mUserManager.exists(userId)) return null;
-        if (GmsManagerService.shouldHide(userId, packageName))
-            return null;
         flags = updateFlagsForApplication(flags, userId);
 
         if (!isRecentsAccessingChildProfiles(Binder.getCallingUid(), userId)) {
@@ -1609,20 +1603,6 @@ public class ComputerEngine implements Computer {
         return result;
     }
 
-    private PackageInfo mayFakeSignature(AndroidPackage p, PackageInfo pi,
-            Set<String> permissions) {
-        try {
-            if (permissions.contains("android.permission.FAKE_PACKAGE_SIGNATURE")
-                    && p.getTargetSdkVersion() > Build.VERSION_CODES.LOLLIPOP_MR1
-                    && p.getMetaData() != null) {
-                String sig = p.getMetaData().getString("fake-signature");
-                if (sig != null) {
-                    pi.signatures = new Signature[] {new Signature(sig)};
-               }
-            }
-        } catch (Throwable t) {
-            // We should never die because of any failures, this is system code!
-            Log.w("PackageManagerService.FAKE_PACKAGE_SIGNATURE", t);
     private boolean requestsFakeSignature(AndroidPackage p) {
         return p.getMetaData() != null &&
                 p.getMetaData().getString("fake-signature") != null;
@@ -1681,8 +1661,6 @@ public class ComputerEngine implements Computer {
                     : mPermissionManager.getGrantedPermissions(ps.getPackageName(), userId);
 
             PackageInfo packageInfo = mayFakeSignature(p, PackageInfoUtils.generate(p, gids, flags,
-                    state.getFirstInstallTime(), ps.getLastUpdateTime(), permissions, state, userId,
-                    ps), permissions);
                     state.getFirstInstallTime(), ps.getLastUpdateTime(), permissions, state, userId, ps),
                     permissions);
 
@@ -1727,8 +1705,6 @@ public class ComputerEngine implements Computer {
 
     public final PackageInfo getPackageInfo(String packageName,
             @PackageManager.PackageInfoFlagsBits long flags, int userId) {
-        if (GmsManagerService.shouldHide(userId, packageName))
-            return null;
         return getPackageInfoInternal(packageName, PackageManager.VERSION_CODE_HIGHEST,
                 flags, Binder.getCallingUid(), userId);
     }
@@ -1742,8 +1718,6 @@ public class ComputerEngine implements Computer {
     public final PackageInfo getPackageInfoInternal(String packageName, long versionCode,
             long flags, int filterCallingUid, int userId) {
         if (!mUserManager.exists(userId)) return null;
-        if (GmsManagerService.shouldHide(userId, packageName))
-            return null;
         flags = updateFlagsForPackage(flags, userId);
         enforceCrossUserPermission(Binder.getCallingUid(), userId,
                 false /* requireFullPermission */, false /* checkShell */, "get package info");
@@ -1840,8 +1814,7 @@ public class ComputerEngine implements Computer {
         enforceCrossUserPermission(callingUid, userId, false /* requireFullPermission */,
                 false /* checkShell */, "get installed packages");
 
-        return GmsManagerService.recreatePackageList(
-                        userId, getInstalledPackagesBody(flags, userId, callingUid));
+        return getInstalledPackagesBody(flags, userId, callingUid);
     }
 
     protected ParceledListSlice<PackageInfo> getInstalledPackagesBody(long flags, int userId,
@@ -4799,7 +4772,7 @@ public class ComputerEngine implements Computer {
             }
         }
 
-        return GmsManagerService.recreateApplicationList(userId, list);
+        return list;
     }
 
     @Nullable
@@ -5781,8 +5754,7 @@ public class ComputerEngine implements Computer {
             return PackageInfoUtils.generateProcessInfo(sus.processes, 0);
         } else if (settingBase instanceof PackageSetting) {
             final PackageSetting ps = (PackageSetting) settingBase;
-            final AndroidPackage pkg = ps.getPkg();
-            return pkg == null ? null : PackageInfoUtils.generateProcessInfo(pkg.getProcesses(), 0);
+            return PackageInfoUtils.generateProcessInfo(ps.getPkg().getProcesses(), 0);
         }
         return null;
     }
